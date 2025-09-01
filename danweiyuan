@@ -1,0 +1,526 @@
+%% 系统参数设置
+% n = 3;                         % 状态维度
+% m = 3;                         % 输入维度（B = I）
+% Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+% R = (1e-3)* eye(m);            % 输入权重矩阵
+% T = 20;                        % 数据长度
+% A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+% B = eye(3);                    % 单位矩阵
+% K = dlqr(A,B,Q,R);
+% disp('矩阵 K:');
+% disp(K);
+% 
+% % 计算 K 的特征值
+% eigenvalues = eig(K);
+% disp('矩阵 K 的特征值:');
+% disp(eigenvalues);
+% 
+% % 生成单位圆的坐标
+% theta = linspace(0, 2*pi, 100);
+% unit_circle_x = cos(theta);
+% unit_circle_y = sin(theta);
+% 
+% % 创建图形
+% figure('Position', [100, 100, 800, 600]);
+% 
+% % 绘制单位圆
+% plot(unit_circle_x, unit_circle_y, 'b-', 'LineWidth', 2);
+% hold on;
+% 
+% % 绘制特征值
+% scatter(real(eigenvalues), imag(eigenvalues), 50, 'r', 'filled', 'MarkerEdgeColor', 'k');
+% 
+% % 绘制坐标轴
+% plot([-1.5, 1.5], [0, 0], 'k--', 'LineWidth', 1);  % x轴
+% plot([0, 0], [-1.5, 1.5], 'k--', 'LineWidth', 1);  % y轴
+% 
+% % 设置图形属性
+% grid on;
+% axis equal;
+% axis([-1.5, 1.5, -1.5, 1.5]);
+% title('矩阵 K 的特征值与单位圆', 'FontSize', 14);
+% xlabel('实部', 'FontSize', 12);
+% ylabel('虚部', 'FontSize', 12);
+% 
+% % 添加图例
+% legend('单位圆', '特征值', 'Location', 'best');
+% 
+% % 将特征值标签垂直排列显示
+% x_pos = 0.85;  % 固定 x 坐标位置（单位圆外右侧）
+% y_start = 0.85;  % 起始 y 坐标
+% y_step = -0.1;  % 每个标签之间的垂直间距
+% 
+% % 添加标题
+% text(x_pos, y_start+0.1, '特征值:', 'FontSize', 10, 'FontWeight', 'bold');
+% 
+% % 循环显示每个特征值，垂直排列
+% for i = 1:length(eigenvalues)
+%     y_pos = y_start + i * y_step;
+% % 只显示实部
+%     text(x_pos, y_pos, ...
+%     sprintf('λ%d = %.4f', i, real(eigenvalues(i))), ...
+%     'FontSize', 10);
+% end
+% 
+% 
+% % 显示实部和虚部
+% % 添加特征值的数值标签
+% for i = 1:length(eigenvalues)
+%     y_pos = y_start + i * y_step;
+%     text( x_pos, y_pos, ...
+%         sprintf('%.4f + %.4fi', real(eigenvalues(i)), imag(eigenvalues(i))), ...
+%         'FontSize', 10);
+% end  
+%%  加入攻击后的单位圆
+% 
+% % 系统参数设置
+% n = 3;                         % 状态维度
+% m = 3;                         % 输入维度（B = I）
+% Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+% R = (1e-3)* eye(m);            % 输入权重矩阵
+% T = 20;                        % 数据长度
+% A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+% B = eye(3);                    % 单位矩阵
+% lambda =8*(1e-6); 
+% U0 = randn(m, T);
+% D0 = 0.1*randn(n,T); 
+% % disp('U0=');
+% % disp(U0)
+% x = zeros(n, T+1);            % 初始状态
+% for k = 1:T                   % 按照状态转移方程更新状态
+%     Uk = U0(:, k);
+%     Dk = D0(:, k);
+%     x(:, k + 1) = A * x(:, k) + B * Uk + Dk;
+% end
+% X0 = x(:, 2:end); 
+% X1 = A * X0 + B * U0;        % 下一时刻状态 (无噪声情况下)
+% X1 = X1 + D0;                % 添加噪声后的下一时刻状态                          
+% W0 = [U0; X0];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+% R1 = rank(W0);
+% [m_rows, n_cols] = size(W0);   % 正确获取行数和列数（避免使用内置函数名）
+% min_dim = min(m_rows, n_cols); % 计算行数和列数的较小值
+% % if R1 == min_dim
+% %     disp('矩阵W0是满秩的');
+% % else
+% %     disp('矩阵W0不是满秩的');
+% % end
+% all_combinations = {};           % 生成所有非空攻击组合（按通道数量及索引排序）
+% for k = 1:m
+%     combs = nchoosek(1:m, k);    % 选择k个通道的组合
+%     for i = 1:size(combs, 1)
+%         all_combinations{end+1} = combs(i, :);
+%     end
+% end
+% M = length(all_combinations) + 1;% j=1对应无攻击
+% j = randi([1, M],1);
+% D_a = cell(M, 1);
+% K_a = cell(M, 1);
+% if j == 1   
+%         D_a{j} = zeros(m,m);     % 无攻击时D_a,K_a为零矩阵
+%         K_a{j} = zeros(m,n); 
+% else
+%     selected_channels = all_combinations{j-1};   % 获取选中的通道索引
+%     diag_elements = zeros(1, m);
+%     diag_elements(selected_channels) = 1;        % 选中的通道置1
+%     D_a{j} = diag(diag_elements);    
+%     K_a{j} = randn(m, n);  
+% end
+% product = D_a{j} * K_a{j};
+% U_{k}=product*X0;
+% 
+% alpha = 0.8;                                     % 攻击能量上限
+% current_norm = norm(product, 'fro');             % 计算范数
+% if current_norm > (alpha)
+%     scaling_factor = (alpha)* current_norm;
+%     K_a{j} = K_a{j} * scaling_factor;            % 缩放矩阵
+% end
+% 
+% productssuofang = D_a{j} * K_a{j};
+% Ua{k}=productssuofang*X0;
+% % 重新设计攻击系统
+% U0a=U0+Ua{k};
+% xa = zeros(n, T+1);            % 初始状态
+% for k = 1:T                   % 按照状态转移方程更新状态
+%     Uk = U0a(:, k);
+%     Dk = D0(:, k);
+%     xa(:, k + 1) = A * xa(:, k) + B * Uk + Dk;
+% end
+% X0a = xa(:, 2:end); 
+% % X1 = A * X0a + B * U0a;        % 下一时刻状态 (无噪声情况下)
+% % X1a =X1+D0;
+% X1a = A * X0a + B * U0a + D0;                % 添加噪声后的下一时刻状态                          
+% W0a = [U0a; X0a];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+% R2 = rank(W0a);
+% [m_rows, n_cols] = size(W0a);   % 正确获取行数和列数（避免使用内置函数名）
+% min_dima = min(m_rows, n_cols); % 计算行数和列数的较小值
+% % if R2 == min_dima
+% %     disp('矩阵W0a是满秩的');
+% % else
+% %     disp('矩阵W0a不是满秩的');
+% % end
+% 
+%         cvx_clear;
+%         Pi = eye(size(W0a,2)) - pinv(W0a)*W0a;
+%         cvx_begin sdp quiet
+%             variable X(n,n)
+%             variable V(size(W0a,2), n)    % 辅助变量Y=GP
+%             variable G(size(W0a,2), n)
+%             minimize trace(Q*X0a*V) + trace(X)+lambda * norm(Pi*V, 'fro');
+%             subject to
+%                [X0a*V - eye(n), X1a * V;
+%                  V' * X1a',     X0a*V] >= 0;
+%                 [X,           sqrtm(R)*U0a * V;
+%                  V' * U0a' * sqrtm(R), X0a*V] >= 0;
+%                 Pi * V == 0;
+%         cvx_end
+%         if strcmp(cvx_status, 'Solved')
+%             Ke = U0a*V*pinv(X0a*V);
+%             Ke1=U0a*V*pinv(X0a*V)-productssuofang;
+%         end
+%             disp('数据驱动控制器Ke1=：'); 
+%             disp(Ke1);
+% 
+%             A_shurer = A + B * Ke1;
+%             disp('A_shurer=')
+%             disp(A_shurer)
+% 
+%             % 计算数据驱动控制器特征值
+%             eigenvalues = eig(A_shurer);
+%             disp('矩阵 A_shurer 的特征值:');
+%             disp(eigenvalues);
+% 
+%             % 计算每个特征值的模
+%             eigenvalue_magnitudes = abs(eigenvalues);
+%             disp('eigenvalue_magnitudes=')
+%             disp(eigenvalue_magnitudes)
+% 
+%             % 判断是否Schur稳定（所有特征值的模均小于1）
+%             is_stable = all(eigenvalue_magnitudes < 1);
+%          
+%             % 输出结果
+%             fprintf('矩阵 A_Schur 的特征值：\n');
+%             for i = 1:length(eigenvalues)
+%                 fprintf('λ%d = %.4f + %.4fi, 模 = %.4f\n', ...
+%                 i, real(eigenvalues(i)), imag(eigenvalues(i)), eigenvalue_magnitudes(i));
+%             end
+% 
+%            % 稳定性判断
+%            if is_stable
+%               fprintf('矩阵 A_Schur 是 Schur 稳定的（所有特征值的模 < 1）\n');
+%            else
+% 
+%               % 找出不稳定的特征值
+%               unstable_indices = find(eigenvalue_magnitudes >= 1);
+%               fprintf('矩阵 A_Schur 不是 Schur 稳定的\n');
+%                  for i = 1:length(unstable_indices)
+%                      idx = unstable_indices(i);
+%                      fprintf('  不稳定特征值 λ%d: 模 = %.4f\n', idx, eigenvalue_magnitudes(idx));
+%                  end
+%            end    
+% 
+% % %  best:将图例放置在不覆盖数据点、坐标轴标签、标题等关键内容的位置，优先选择空白空间最大的区域
+% % % 添加特征值的数值标签
+% % for i = 1:length(eigenvalues)
+% %     text(real(eigenvalues(i))+0.05, imag(eigenvalues(i))+0.05, ...
+% %         sprintf('%.4f + %.4fi', real(eigenvalues(i)), imag(eigenvalues(i))), ...
+% %         'FontSize', 10);
+% % end    
+
+%% 画一张图上
+% 系统参数设置
+n = 3;                         % 状态维度
+m = 3;                         % 输入维度（B = I）
+Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+R = (1e-3)* eye(m);            % 输入权重矩阵
+T = 20;                        % 数据长度
+A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+B = eye(3);                    % 单位矩阵
+
+
+lambda =5*(1e-6); 
+U0 = randn(m, T);
+D0 = 0.1*randn(n,T); 
+% disp('U0=');
+% disp(U0)
+x = zeros(n, T+1);            % 初始状态
+for k = 1:T                   % 按照状态转移方程更新状态
+    Uk = U0(:, k);
+    Dk = D0(:, k);
+    x(:, k + 1) = A * x(:, k) + B * Uk + Dk;
+end
+X0 = x(:, 2:end); 
+X1 = A * X0 + B * U0;        % 下一时刻状态 (无噪声情况下)
+X1 = X1 + D0;                % 添加噪声后的下一时刻状态                          
+W0 = [U0; X0];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+R1 = rank(W0);
+[m_rows, n_cols] = size(W0);   % 正确获取行数和列数（避免使用内置函数名）
+min_dim = min(m_rows, n_cols); % 计算行数和列数的较小值
+% if R1 == min_dim
+%     disp('矩阵W0是满秩的');
+% else
+%     disp('矩阵W0不是满秩的');
+% end
+all_combinations = {};           % 生成所有非空攻击组合（按通道数量及索引排序）
+for k = 1:m
+    combs = nchoosek(1:m, k);    % 选择k个通道的组合
+    for i = 1:size(combs, 1)
+        all_combinations{end+1} = combs(i, :);
+    end
+end
+M = length(all_combinations) + 1;% j=1对应无攻击
+j = randi([1, M],1);
+D_a = cell(M, 1);
+K_a = cell(M, 1);
+if j == 1   
+        D_a{j} = zeros(m,m);     % 无攻击时D_a,K_a为零矩阵
+        K_a{j} = zeros(m,n); 
+else
+    selected_channels = all_combinations{j-1};   % 获取选中的通道索引
+    diag_elements = zeros(1, m);
+    diag_elements(selected_channels) = 1;        % 选中的通道置1
+    D_a{j} = diag(diag_elements);    
+    K_a{j} = randn(m, n);  
+end
+product = D_a{j} * K_a{j};
+U_{k}=product*X0;
+
+alpha = 0.8;                                     % 攻击能量上限
+current_norm = norm(product, 'fro');             % 计算范数
+if current_norm > (alpha)
+    scaling_factor = (alpha)* current_norm;
+    K_a{j} = K_a{j} * scaling_factor;            % 缩放矩阵
+end
+
+productssuofang = D_a{j} * K_a{j};
+Ua{k}=productssuofang*X0;
+% 重新设计攻击系统
+U0a=U0+Ua{k};
+xa = zeros(n, T+1);            % 初始状态
+for k = 1:T                   % 按照状态转移方程更新状态
+    Uk = U0a(:, k);
+    Dk = D0(:, k);
+    xa(:, k + 1) = A * xa(:, k) + B * Uk + Dk;
+end
+X0a = xa(:, 2:end); 
+% X1 = A * X0a + B * U0a;        % 下一时刻状态 (无噪声情况下)
+% X1a =X1+D0;
+X1a = A * X0a + B * U0a + D0;                % 添加噪声后的下一时刻状态                          
+W0a = [U0a; X0a];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+R2 = rank(W0a);
+[m_rows, n_cols] = size(W0a);   % 正确获取行数和列数（避免使用内置函数名）
+min_dima = min(m_rows, n_cols); % 计算行数和列数的较小值
+% if R2 == min_dima
+%     disp('矩阵W0a是满秩的');
+% else
+%     disp('矩阵W0a不是满秩的');
+% end
+
+        cvx_clear;
+        Pi = eye(size(W0a,2)) - pinv(W0a)*W0a;
+        cvx_begin sdp quiet
+            variable X(n,n)
+            variable V(size(W0a,2), n)    % 辅助变量Y=GP
+            variable G(size(W0a,2), n)
+            minimize trace(Q*X0a*V) + trace(X)+lambda * norm(Pi*V, 'fro');
+            subject to
+               [X0a*V - eye(n), X1a * V;
+                 V' * X1a',     X0a*V] >= 0;
+                [X,           sqrtm(R)*U0a * V;
+                 V' * U0a' * sqrtm(R), X0a*V] >= 0;
+                Pi * V == 0;
+        cvx_end
+        if strcmp(cvx_status, 'Solved')
+            Ke = U0a*V*pinv(X0a*V);
+            disp('Ke=')
+            disp(Ke)
+            Ke1=U0a*V*pinv(X0a*V)-productssuofang;
+        end
+            disp('数据驱动控制器Ke1=：'); 
+            disp(Ke1);
+
+            A_schur = A + B * Ke1;
+            disp('A_schur=')
+            disp(A_schur)
+
+% 计算 A_Schur 的特征值
+eig_A_schur = eig(A_schur);
+disp('eig_A_schur=')
+disp(eig_A_schur)
+
+magnitudes_A_schur = abs(eig_A_schur);
+disp('magnitudes_A_schur=')
+disp(magnitudes_A_schur)
+
+is_stable_A_schur = all(magnitudes_A_schur < 1);
+if is_stable_A_schur
+    disp('矩阵 A_schur 是舒尔稳定的。');
+else
+    disp('矩阵 A_schur 不是舒尔稳定的。');
+end
+
+
+% 计算 A + B*K 的特征值（之前只显示实部的矩阵）
+K = dlqr(A,B,Q,R);
+disp('矩阵 K:');
+disp(K);
+
+A_plus_BK = A + B*K;
+eig_A_plus_BK = eig(A_plus_BK);
+disp('eig_A_plus_BK-')
+disp(eig_A_plus_BK)
+
+magnitudes_A_plus_BK = abs(eig_A_plus_BK);
+disp('magnitudes_A_plus_BK=')
+disp(magnitudes_A_plus_BK)
+
+is_stable_A_plus_BK = all(magnitudes_A_plus_BK < 1);
+if is_stable_A_plus_BK
+    disp('矩阵 A + B * K 是舒尔稳定的。');
+else
+    disp('矩阵 A + B * K 不是舒尔稳定的。');
+end
+
+
+% 第一张图
+% 生成单位圆的坐标
+theta = linspace(0, 2*pi, 100);
+unit_circle_x = cos(theta);
+unit_circle_y = sin(theta);
+
+% 创建图形
+figure('Position', [100, 100, 800, 600]);
+
+% 绘制单位圆
+plot(unit_circle_x, unit_circle_y, 'b-', 'LineWidth', 2);
+hold on;
+
+% 绘制特征值
+scatter(real(eig_A_schur), imag(eig_A_schur), 50, 'r', 'filled', 'MarkerEdgeColor', 'k');
+scatter(real(eig_A_plus_BK), imag(eig_A_plus_BK), 50, 'r', 'filled', 'MarkerEdgeColor', 'k');
+
+% 绘制坐标轴
+plot([-2.5, 2.5], [0, 0], 'k--', 'LineWidth', 1);  % x轴
+plot([0, 0], [-2.5, 2.5], 'k--', 'LineWidth', 1);  % y轴
+
+% 设置图形属性
+grid on;
+axis equal;
+axis([-1.5, 1.5, -1.5, 1.5]);
+% title('矩阵 K 的特征值与单位圆', 'FontSize', 14);
+xlabel('Re', 'FontSize', 12);
+ylabel('Im', 'FontSize', 12);
+
+% 添加图例
+legend('Unit circle', 'Eigenvalue', 'Location', 'northeast');
+
+% % 将A_Schur特征值标签垂直排列显示
+% x_pos = 0.1;  % 固定 x 坐标位置（单位圆外右侧）
+% y_start = 0.6;  % 起始 y 坐标
+% y_step = -0.15;  % 每个标签之间的垂直间距
+% 
+% % 添加标题
+% text(x_pos, y_start, 'eig(A Schur):', 'FontSize', 10, 'FontWeight', 'bold');
+% 
+% % 循环显示A_Schur的每个特征值，垂直排列
+% for i = 1:length(eig_A_schur )
+%     y_pos = y_start + i * y_step;
+% 
+% % 显示实部和虚部
+%   text(x_pos, y_pos, ...
+%   sprintf('%.4f + %.4fi', real(eig_A_schur(i)), imag(eig_A_schur(i))), ...
+%   'FontSize', 10);
+% end
+% 
+% % % 显示实部
+% %     text(x_pos, y_pos, ...
+% %     sprintf('λ%d = %.4f+', i, real(eig_A_schur(i))), ...
+% %     'FontSize', 10);
+% % end
+%          
+% % 将特征值标签垂直排列显示
+% x_pos = 1.75;  % 固定 x 坐标位置（单位圆外右侧）
+% y_start = 0.6;  % 起始 y 坐标
+% y_step = -0.15;  % 每个标签之间的垂直间距
+% 
+% % 添加标题
+% text(x_pos, y_start, 'eig(A+BK):', 'FontSize', 10, 'FontWeight', 'bold');
+% 
+% % 循环显示A + B * K的每个特征值，垂直排列
+% for i = 1:length(eig_A_plus_BK )
+%     y_pos = y_start + i * y_step;
+% % 只显示实部
+%     text(x_pos, y_pos, ...
+%     sprintf('λ%d = %.4f', i, real(eig_A_plus_BK(i))), ...
+%     'FontSize', 10);
+% end
+
+
+% 第二张图
+% 生成单位圆的坐标
+theta = linspace(0, 2*pi, 100);
+unit_circle_x = cos(theta);
+unit_circle_y = sin(theta);
+
+% 创建图形
+figure('Position', [100, 100, 800, 600]);
+
+% 绘制单位圆
+plot(unit_circle_x, unit_circle_y, 'b-', 'LineWidth', 2);
+hold on;
+
+% 绘制特征值
+scatter(real(eig_A_schur), imag(eig_A_schur), 50, 'r', 'filled', 'MarkerEdgeColor', 'k');
+scatter(real(eig_A_plus_BK), imag(eig_A_plus_BK), 50, 'r', 'filled', 'MarkerEdgeColor', 'k');
+
+% 绘制坐标轴
+plot([-2.5, 2.5], [0, 0], 'k--', 'LineWidth', 1);  % x轴
+plot([0, 0], [-2.5, 2.5], 'k--', 'LineWidth', 1);  % y轴
+
+% 设置图形属性
+grid on;
+axis equal;
+axis([-1.5, 1.5, -1.5, 1.5]);
+
+% title('矩阵 K 的特征值与单位圆', 'FontSize', 14);
+xlabel('Re', 'FontSize', 12);
+ylabel('Im', 'FontSize', 12);
+
+% % 添加图例
+legend('Unit circle', 'Eigenvalue', 'Location', 'northeast');
+
+% % 将A_Schur特征值标签垂直排列显示
+% x_pos = 0.1;  % 固定 x 坐标位置（单位圆外右侧）
+% y_start = 0.6;  % 起始 y 坐标
+% y_step = -0.15;  % 每个标签之间的垂直间距
+% 
+% % 添加标题
+% text(x_pos, y_start, 'eig(A Schur):', 'FontSize', 10, 'FontWeight', 'bold');
+% 
+% % 循环显示A_Schur的每个特征值，垂直排列
+% for i = 1:length(eig_A_schur )
+%     y_pos = y_start + i * y_step;
+% 
+% % 显示实部和虚部
+%   text(x_pos, y_pos, ...
+%   sprintf('%.4f + %.4fi', real(eig_A_schur(i)), imag(eig_A_schur(i))), ...
+%   'FontSize', 10);
+% end
+% 
+% x_pos = 1.5;  % 固定 x 坐标位置（单位圆外右侧）
+% y_start = 0.6;  % 起始 y 坐标
+% y_step = -0.15;  % 每个标签之间的垂直间距
+
+% 
+% % 添加标题
+% text(x_pos, y_start, 'A+BK特征值:', 'FontSize', 10, 'FontWeight', 'bold');
+% 
+% % 循环显示A + B * K的每个特征值，垂直排列
+% for i = 1:length(eig_A_plus_BK )
+%     y_pos = y_start + i * y_step;
+% % 只显示实部
+%     text(x_pos, y_pos, ...
+%     sprintf('λ%d = %.4f', i, real(eig_A_plus_BK(i))), ...
+%     'FontSize', 10);
+% end
+
+
