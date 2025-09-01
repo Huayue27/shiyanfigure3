@@ -1,8 +1,3 @@
 # shiyanfigure3
-n = 3;                         % 状态维度
-m = 3;                         % 输入维度（B = I）
-Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
-R = (1e-3)* eye(m);            % 输入权重矩阵
-T = 20;                        % 数据长度
-A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
-B = eye(3);   
+# Demonstration of the relationship between system stability performance and the regularization term γ about data-driven linear quadratic regulator design for unknown linear
+systems against false data injection attack
