@@ -1,0 +1,907 @@
+%% 公式17加lambda——系统百分百稳定 相同实验
+%    系统参数设置
+%    n = 3;                         % 状态维度
+%    m = 3;                         % 输入维度（B = I）
+%    T = 20;                        % 数据长度
+%    Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+%    R = (1e-3)* eye(m);            % 输入权重矩阵
+% 
+% %                                系统矩阵（离散时间不稳定的拉普拉斯系统）
+% A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+% B = eye(3);                       %单位矩阵
+% 
+% U0 = randn(m, T);
+% D0 = 0.1*randn(n,T); 
+% disp('U0=');
+% disp(U0)
+% x = zeros(n, T+1);            % 初始状态
+% for k = 1:T                   % 按照状态转移方程更新状态
+%     Uk = U0(:, k);
+%     Dk = D0(:, k);
+%     x(:, k + 1) = A * x(:, k) + B * Uk + Dk;
+% end
+% X0 = x(:, 2:end); 
+% X1 = A * X0 + B * U0;        % 下一时刻状态 (无噪声情况下)
+% X1 = X1 + D0;                % 添加噪声后的下一时刻状态                          
+% W0 = [U0; X0];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+% R1 = rank(W0);
+% [m_rows, n_cols] = size(W0);   % 正确获取行数和列数（避免使用内置函数名）
+% min_dim = min(m_rows, n_cols); % 计算行数和列数的较小值
+% if R1 == min_dim
+%     disp('矩阵W0是满秩的');
+% else
+%     disp('矩阵W0不是满秩的');
+% end
+% all_combinations = {};           % 生成所有非空攻击组合（按通道数量及索引排序）
+% for k = 1:m
+%     combs = nchoosek(1:m, k);    % 选择k个通道的组合
+%     for i = 1:size(combs, 1)
+%         all_combinations{end+1} = combs(i, :);
+%     end
+% end
+% M = length(all_combinations) + 1;% j=1对应无攻击
+% j = randi([1, M],1);
+% D_a = cell(M, 1);
+% K_a = cell(M, 1);
+% if j == 1   
+%         D_a{j} = zeros(m,m);     % 无攻击时D_a,K_a为零矩阵
+%         K_a{j} = zeros(m,n); 
+% else
+%     selected_channels = all_combinations{j-1};   % 获取选中的通道索引
+%     diag_elements = zeros(1, m);
+%     diag_elements(selected_channels) = 1;        % 选中的通道置1
+%     D_a{j} = diag(diag_elements);    
+%     K_a{j} = randn(m, n);  
+% end
+% product = D_a{j} * K_a{j};
+% alpha = 0.8;                                     % 攻击能量上限
+% current_norm = norm(product, 'fro');             % 计算范数
+% if current_norm > (alpha)
+%     scaling_factor = (alpha)* current_norm;
+%     K_a{j} = K_a{j} * scaling_factor;            % 缩放矩阵
+% end
+% 
+% 
+% lambda_values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50] * 1e-4;
+% num_lambdas = length(lambda_values);
+% stable_percentages = zeros(num_lambdas, 1);
+% 
+% for lambda_index = 1:num_lambdas
+%     lambda = lambda_values(lambda_index);
+%     stable_count = 0;
+%     
+%     for experiment = 1:10
+%         cvx_clear;
+%         Pi = eye(size(W0,2)) - pinv(W0)*W0;
+%         cvx_begin sdp quiet
+%             variable X(n,n)
+%             variable Y(size(W0,2), n)    % 辅助变量Y=GP
+%             variable G(size(W0,2), n)
+%             minimize trace(Q*X0*Y) + trace(X)+lambda * norm(Pi*G, 'fro');
+%             subject to
+%                [X0*Y - eye(n), X1 * Y;
+%                  Y' * X1',     X0*Y] >= 0;
+%                 [X,           sqrtm(R)*U0 * Y;
+%                  Y' * U0' * sqrtm(R), X0*Y] >= 0;
+%                 Pi * Y == 0;
+%         cvx_end
+%         
+%         if strcmp(cvx_status, 'Solved')
+%             K = U0*Y*pinv(X0*Y);
+%             A_shurer = A + B * K;
+%             if all(abs(eig(A_shurer)) < 1)
+%                 stable_count = stable_count + 1;
+%                 disp('闭环系统稳定')
+%             end
+%         end
+%     end
+%     stable_percentages(lambda_index) = (stable_count / 10)*100;
+%     fprintf('当 lambda = %.6f 时',lambda);
+%     disp(['稳定百分比：', num2str(stable_percentages(lambda_index)), '%']);      
+% end
+
+%% 无攻击 
+
+% %当 lambda = 0.000001 时稳定百分比：50%，其余百分百稳定
+%    n = 3;                         % 状态维度
+%    m = 3;                         % 输入维度（B = I）
+%    T = 20;                        % 数据长度
+%    Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+%    R = (1e-3)* eye(m);            % 输入权重矩阵
+% A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+% B = eye(3);                       %单位矩阵
+% cimi=1e-7;
+% lambda_values = [0.5:0.1:1,2:1:10, 20:10:100] * cimi;
+% num_lambdas = length(lambda_values);
+% % disp(num_lambdas)
+% stable_percentages = zeros(num_lambdas, 1);
+% times=100;
+% 
+% for lambda_index = 1:num_lambdas
+%     lambda = lambda_values(lambda_index);
+%     stable_count = 0;    
+%     for experiment = 1:times
+% U0 = randn(m, T);
+% D0 = 0.1*randn(n,T); 
+% % disp('U0=');
+% % disp(U0)
+% x = zeros(n, T+1);            % 初始状态
+% for k = 1:T                   % 按照状态转移方程更新状态
+%     Uk = U0(:, k);
+%     Dk = D0(:, k);
+%     x(:, k + 1) = A * x(:, k) + B * Uk + Dk;
+% end
+% X0 = x(:, 2:end); 
+% X1 = A * X0 + B * U0;        % 下一时刻状态 (无噪声情况下)
+% X1 = X1 + D0;                % 添加噪声后的下一时刻状态                          
+% W0 = [U0; X0];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+% R1 = rank(W0);
+% [m_rows, n_cols] = size(W0);   % 正确获取行数和列数（避免使用内置函数名）
+% min_dim = min(m_rows, n_cols); % 计算行数和列数的较小值
+% if R1 == min_dim
+%     disp('矩阵W0是满秩的');
+% else
+%     disp('矩阵W0不是满秩的');
+% end
+% 
+%         cvx_clear;
+%         Pi = eye(size(W0,2)) - pinv(W0)*W0;
+%         cvx_begin sdp quiet
+%             variable X(n,n)
+%             variable Y(size(W0,2), n)    % 辅助变量Y=GP
+%             variable G(size(W0,2), n)
+%             minimize trace(Q*X0*Y) + trace(X)+lambda * norm(Pi*G, 'fro');
+%             subject to
+%                [X0*Y - eye(n), X1 * Y;
+%                  Y' * X1',     X0*Y] >= 0;
+%                 [X,           sqrtm(R)*U0 * Y;
+%                  Y' * U0' * sqrtm(R), X0*Y] >= 0;
+%                 Pi * Y == 0;
+%         cvx_end
+%         
+%         if strcmp(cvx_status, 'Solved')
+%             K = U0*Y*pinv(X0*Y);
+%             A_shurer = A + B * K;
+%             if all(abs(eig(A_shurer)) < 1)
+%                 stable_count = stable_count + 1;
+%                 disp('闭环系统稳定')
+%             end
+%         end
+%     end
+%     stable_percentages(lambda_index) = (stable_count / times)*100;
+%     fprintf('当 lambda = %.7f 时',lambda);
+%     disp(['稳定百分比：', num2str(stable_percentages(lambda_index)), '%']);  
+%     stable_counts(lambda_index) = stable_count;
+% end
+% figure;
+% hold on;
+% % 定义等距横坐标位置
+% lambda_display_values = lambda_values*(1e+7);
+% x_pos = 1:num_lambdas; % 等距索引 [1,2,...,14]
+% % 生成密集插值点（使曲线平滑）
+% x_dense = linspace(1, num_lambdas, 1000); % 1000个插值点
+% y_dense = interp1(x_pos, stable_counts, x_dense, 'pchip'); % 样条插值
+% 
+% % 绘制平滑曲线（蓝色实线）并在原始数据点添加圆圈标记
+% plot(x_dense, y_dense, 'r-', 'LineWidth', 1);       % 平滑曲线
+% plot(x_pos, stable_counts, 'ro', 'MarkerFaceColor', 'r', 'MarkerSize', 5); % 数据点标记
+% xticks(x_pos);% 强制等距刻度
+% xtick_labels = arrayfun(@(x) num2str(x), lambda_display_values, 'UniformOutput', false);
+% xticklabels(xtick_labels); % 显示为原始λ值（×1e-6）
+% xlim([0.5, num_lambdas+0.5]);
+% 
+% %设置纵坐标
+% yticks(0:10:times);
+% ylim([0 times]);
+% 
+% % 坐标轴样式
+% ax = gca;
+% ax.Box = 'off';                     % 关闭默认框
+% plot([0.5, 0.5], [0, 100], 'k-', 'LineWidth', 1);    % 左框
+% plot([0.5, num_lambdas+0.5], [times, times], 'k-', 'LineWidth', 1); % 上框
+% plot([num_lambdas+0.5, num_lambdas+0.5], [100, 0], 'k-', 'LineWidth', 1); % 右框
+% plot([num_lambdas+0.5, 0.5], [0, 0], 'k-', 'LineWidth', 1); % 下框
+% 
+% ax.Layer = 'top'; % 确保边框在图层最上方
+% 
+% ax.XAxisLocation = 'origin';
+% ax.YAxisLocation = 'origin';
+% xlabel('\gamma (×10^{-7})');
+% ylabel('Successful Trials Percentages');
+% title('The impact of λ on Stable Controller Success Times ');
+ 
+  
+%% 公式17加lambda——攻击系统 加图 100组实验 λ范围 5-100 303-306行已改正
+ 
+% % 当 lambda = 0.000001 时稳定百分比：90%，其余百分百稳定
+% % lambda_values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50] * 1e-6;
+% 
+% % 系统参数设置
+%    n = 3;                         % 状态维度
+%    m = 3;                         % 输入维度（B = I）
+%    T = 20;                        % 数据长度
+%    Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+%    R = (1e-3)* eye(m);            % 输入权重矩阵
+% 
+% A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+% B = eye(3);                       %单位矩阵
+% cimi=1e-7;
+% lambda_values = [5:1:10, 20:10:100] * cimi; 
+% num_lambdas = length(lambda_values);
+% % disp(num_lambdas)
+% 
+% stable_percentages = zeros(num_lambdas, 1);
+% times=100;
+% for lambda_index = 1:num_lambdas
+%     lambda = lambda_values(lambda_index);
+%     stable_count = 0;
+%     for experiment = 1:times
+% U0 = randn(m, T);
+% D0 = 0.1*randn(n,T); 
+% % disp('U0=');
+% % disp(U0)
+% x = zeros(n, T+1);            % 初始状态
+% for k = 1:T                   % 按照状态转移方程更新状态
+%     Uk = U0(:, k);
+%     Dk = D0(:, k);
+%     x(:, k + 1) = A * x(:, k) + B * Uk + Dk;
+% end
+% X0 = x(:, 2:end); 
+% X1 = A * X0 + B * U0;        % 下一时刻状态 (无噪声情况下)
+% X1 = X1 + D0;                % 添加噪声后的下一时刻状态             
+% W0 = [U0; X0];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+% R1 = rank(W0);
+% [m_rows, n_cols] = size(W0);   % 正确获取行数和列数（避免使用内置函数名）
+% min_dim = min(m_rows, n_cols); % 计算行数和列数的较小值
+% % if R1 == min_dim
+% %     disp('矩阵W0是满秩的');
+% % else
+% %     disp('矩阵W0不是满秩的');
+% % end
+% all_combinations = {};           % 生成所有非空攻击组合（按通道数量及索引排序）
+% for k = 1:m
+%     combs = nchoosek(1:m, k);    % 选择k个通道的组合
+%     for i = 1:size(combs, 1)
+%         all_combinations{end+1} = combs(i, :);
+%     end
+% end
+% M = length(all_combinations) + 1;% j=1对应无攻击
+% j = randi([1, M],1);
+% D_a = cell(M, 1);
+% K_a = cell(M, 1);
+% if j == 1   
+%         D_a{j} = zeros(m,m);     % 无攻击时D_a,K_a为零矩阵
+%         K_a{j} = zeros(m,n); 
+% else
+%     selected_channels = all_combinations{j-1};   % 获取选中的通道索引
+%     diag_elements = zeros(1, m);
+%     diag_elements(selected_channels) = 1;        % 选中的通道置1
+%     D_a{j} = diag(diag_elements);    
+%     K_a{j} = randn(m, n);  
+% end
+% product = D_a{j} * K_a{j};
+% U_{k}=product*X0;
+% 
+% alpha = 0.8;                                     % 攻击能量上限
+% current_norm = norm(product, 'fro');             % 计算范数
+% if current_norm > (alpha)
+%     scaling_factor = (alpha)* current_norm;
+%     K_a{j} = K_a{j} * scaling_factor;            % 缩放矩阵
+% end
+% 
+% productssuofang = D_a{j} * K_a{j};
+% Ua{k}=productssuofang*X0;
+% % 重新设计攻击系统
+% U0a=U0+Ua{k};
+% xa = zeros(n, T+1);            % 初始状态
+% for k = 1:T                   % 按照状态转移方程更新状态
+%     Uk = U0a(:, k);
+%     Dk = D0(:, k);
+%     xa(:, k + 1) = A * xa(:, k) + B * Uk + Dk;
+% end
+% X0a = xa(:, 2:end); 
+% % X1 = A * X0a + B * U0a;        % 下一时刻状态 (无噪声情况下)
+% % X1a = X1a + D0;                % 添加噪声后的下一时刻状态
+  
+% X1a = A * X0a + B * U0a + D0;                % 添加噪声后的下一时刻状态
+% W0a = [U0a; X0a];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+% R2 = rank(W0a);
+% [m_rows, n_cols] = size(W0a);   % 正确获取行数和列数（避免使用内置函数名）
+% min_dima = min(m_rows, n_cols); % 计算行数和列数的较小值
+% % if R2 == min_dima
+% %     disp('矩阵W0a是满秩的');
+% % else
+% %     disp('矩阵W0a不是满秩的');
+% % end
+% 
+%         cvx_clear;
+%         Pi = eye(size(W0a,2)) - pinv(W0a)*W0a;
+%         cvx_begin sdp quiet
+%             variable X(n,n)
+%             variable V(size(W0a,2), n)    % 辅助变量Y=GP
+%             variable G(size(W0a,2), n)
+%             minimize trace(Q*X0a*V) + trace(X)+lambda * norm(Pi*V, 'fro');
+%             subject to
+%                [X0a*V - eye(n), X1a * V;
+%                  V' * X1a',     X0a*V] >= 0;
+%                 [X,           sqrtm(R)*U0a * V;
+%                  V' * U0a' * sqrtm(R), X0a*V] >= 0;
+%                 Pi * V == 0;
+%         cvx_end
+%         if strcmp(cvx_status, 'Solved')
+%             Ke = U0a*V*pinv(X0a*V);
+%             K=U0a*V*pinv(X0a*V)-productssuofang;
+%             A_shurer = A + B * Ke;
+%             if all(abs(eig(A_shurer)) < 1)
+%                 stable_count = stable_count + 1; 
+%             end
+%         end
+%     end
+%     stable_percentages(lambda_index) = (stable_count / times)*100;
+%     fprintf('当 lambda = %.6f 时',lambda);
+%     disp(['稳定百分比：', num2str(stable_percentages(lambda_index)), '%']); 
+%     stable_counts(lambda_index) = stable_count;
+% end
+%  
+% figure;
+% hold on;
+% % 定义等距横坐标位置
+% lambda_display_values = lambda_values*(1e+7);
+% x_pos = 1:num_lambdas; % 等距索引 [1,2,...,14]
+% % 生成密集插值点（使曲线平滑）
+% x_dense = linspace(1, num_lambdas, 1000); % 1000个插值点
+% y_dense = interp1(x_pos, stable_counts, x_dense, 'pchip'); % 样条插值
+% 
+% % 绘制平滑曲线（蓝色实线）并在原始数据点添加圆圈标记
+% plot(x_dense, y_dense, 'r-', 'LineWidth', 1);       % 平滑曲线
+% plot(x_pos, stable_counts, 'ro', 'MarkerFaceColor', 'r', 'MarkerSize', 5); % 数据点标记
+% xticks(x_pos);% 强制等距刻度
+% xtick_labels = arrayfun(@(x) num2str(x), lambda_display_values, 'UniformOutput', false);
+% xticklabels(xtick_labels); % 显示为原始λ值（×1e-6）
+% xlim([0.5, num_lambdas+0.5]);
+% 
+% %设置纵坐标
+% yticks(0:10:times);
+% ylim([0 times]);
+% 
+% % 坐标轴样式
+% ax = gca;
+% ax.Box = 'off';                     % 关闭默认框
+% plot([0.5, 0.5], [0, 100], 'k-', 'LineWidth', 1);    % 左框
+% plot([0.5, num_lambdas+0.5], [times, times], 'k-', 'LineWidth', 1); % 上框
+% plot([num_lambdas+0.5, num_lambdas+0.5], [100, 0], 'k-', 'LineWidth', 1); % 右框
+% plot([num_lambdas+0.5, 0.5], [0, 0], 'k-', 'LineWidth', 1); % 下框
+% 
+% ax.Layer = 'top'; % 确保边框在图层最上方
+% 
+% ax.XAxisLocation = 'origin';
+% ax.YAxisLocation = 'origin';
+% xlabel('\gamma (×10^{-7})');
+% ylabel('Successful Trials Times');
+% title('The impact of γ on Stable Controller Success Times '); 
+%% 公式17加lambda——攻击系统 加图 100组实验 λ范围8-130  471-473行
+
+% 当 lambda = 0.000001 时稳定百分比：90%，其余百分百稳定
+% lambda_values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50] * 1e-6;
+
+% 系统参数设置
+   n = 3;                         % 状态维度
+   m = 3;                         % 输入维度（B = I）
+   T = 20;                        % 数据长度
+   Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+   R = (1e-3)* eye(m);            % 输入权重矩阵
+
+A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+B = eye(3);                       %单位矩阵
+K=dlqr(A,B,Q,R);
+disp(K)
+
+cimi=1e-7;
+% lambda_values = [1:1:10, 20:10:100] * cimi; 
+lambda_values = [7.7:1:10.7, 20:10:100] * cimi; 
+num_lambdas = length(lambda_values);
+% disp(num_lambdas)
+
+stable_percentages = zeros(num_lambdas, 1);
+times=100;
+for lambda_index = 1:num_lambdas
+    lambda = lambda_values(lambda_index);
+    stable_count = 0;
+    for experiment = 1:times
+U0 = randn(m, T);
+D0 = 0.1*randn(n,T); 
+% disp('U0=');
+% disp(U0)
+x = zeros(n, T+1);            % 初始状态
+for k = 1:T                   % 按照状态转移方程更新状态
+    Uk = U0(:, k);
+    Dk = D0(:, k);
+    x(:, k + 1) = A * x(:, k) + B * Uk + Dk;
+end
+X0 = x(:, 2:end); 
+X1 = A * X0 + B * U0;        % 下一时刻状态 (无噪声情况下)
+X1 = X1 + D0;                % 添加噪声后的下一时刻状态                          
+W0 = [U0; X0];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+R1 = rank(W0);
+[m_rows, n_cols] = size(W0);   % 正确获取行数和列数（避免使用内置函数名）
+min_dim = min(m_rows, n_cols); % 计算行数和列数的较小值
+% if R1 == min_dim
+%     disp('矩阵W0是满秩的');
+% else
+%     disp('矩阵W0不是满秩的');
+% end
+all_combinations = {};           % 生成所有非空攻击组合（按通道数量及索引排序）
+for k = 1:m
+    combs = nchoosek(1:m, k);    % 选择k个通道的组合
+    for i = 1:size(combs, 1)
+        all_combinations{end+1} = combs(i, :);
+    end
+end
+M = length(all_combinations) + 1;% j=1对应无攻击
+j = randi([1, M],1);
+D_a = cell(M, 1);
+K_a = cell(M, 1);
+if j == 1   
+        D_a{j} = zeros(m,m);     % 无攻击时D_a,K_a为零矩阵
+        K_a{j} = zeros(m,n); 
+else
+    selected_channels = all_combinations{j-1};   % 获取选中的通道索引
+    diag_elements = zeros(1, m);
+    diag_elements(selected_channels) = 1;        % 选中的通道置1
+    D_a{j} = diag(diag_elements);    
+    K_a{j} = randn(m, n);  
+end
+product = D_a{j} * K_a{j};
+U_{k}=product*X0;
+
+alpha = 0.8;                                     % 攻击能量上限
+current_norm = norm(product, 'fro');             % 计算范数
+if current_norm > (alpha)
+    scaling_factor = (alpha)* current_norm;
+    K_a{j} = K_a{j} * scaling_factor;            % 缩放矩阵
+end
+
+productssuofang = D_a{j} * K_a{j};
+Ua{k}=productssuofang*X0;
+% 重新设计攻击系统
+U0a=U0+Ua{k};
+xa = zeros(n, T+1);            % 初始状态
+for k = 1:T                   % 按照状态转移方程更新状态
+    Uk = U0a(:, k);
+    Dk = D0(:, k);
+    xa(:, k + 1) = A * xa(:, k) + B * Uk + Dk;
+end
+X0a = xa(:, 2:end); 
+% X1 = A * X0a + B * U0a;        % 下一时刻状态 (无噪声情况下)
+% X1a =X1+D0;
+X1a = A * X0a + B * U0a + D0;                % 添加噪声后的下一时刻状态                          
+W0a = [U0a; X0a];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+R2 = rank(W0a);
+[m_rows, n_cols] = size(W0a);   % 正确获取行数和列数（避免使用内置函数名）
+min_dima = min(m_rows, n_cols); % 计算行数和列数的较小值
+% if R2 == min_dima
+%     disp('矩阵W0a是满秩的');
+% else
+%     disp('矩阵W0a不是满秩的');
+% end
+
+        cvx_clear;
+        Pi = eye(size(W0a,2)) - pinv(W0a)*W0a;
+        cvx_begin sdp quiet
+            variable X(n,n)
+            variable V(size(W0a,2), n)    % 辅助变量Y=GP
+            variable G(size(W0a,2), n)
+            minimize trace(Q*X0a*V) + trace(X)+lambda * norm(Pi*V, 'fro');
+            subject to
+               [X0a*V - eye(n), X1a * V;
+                 V' * X1a',     X0a*V] >= 0;
+                [X,           sqrtm(R)*U0a * V;
+                 V' * U0a' * sqrtm(R), X0a*V] >= 0;
+                Pi * V == 0;
+        cvx_end
+        if strcmp(cvx_status, 'Solved')
+            Ke = U0a*V*pinv(X0a*V);        
+            K=U0a*V*pinv(X0a*V)-productssuofang;
+            A_shurer = A + B * Ke;
+            if all(abs(eig(A_shurer)) < 1)
+                stable_count = stable_count + 1; 
+            end
+        end
+    end
+    stable_percentages(lambda_index) = (stable_count / times)*100;
+    fprintf('当 lambda = %.6f 时',lambda);
+    disp(['稳定百分比：', num2str(stable_percentages(lambda_index)), '%']); 
+    stable_counts(lambda_index) = stable_count;
+end
+
+% 找到稳定百分比的最小值及其对应的索引
+[min_percentage, min_index] = min(stable_percentages);
+
+% 获取对应的 lambda 值
+min_lambda = lambda_values(min_index);
+
+% 输出结果
+fprintf('最低点的 lambda 值为: %.7f\n', min_lambda);
+fprintf('对应的稳定百分比为: %.2f%%\n', min_percentage);
+
+
+figure;
+hold on;
+% 定义等距横坐标位置
+lambda_display_values = lambda_values*(1e+7);
+x_pos = 1:num_lambdas; % 等距索引 [1,2,...,14]
+% 生成密集插值点（使曲线平滑）
+x_dense = linspace(1, num_lambdas, 1000); % 1000个插值点
+y_dense = interp1(x_pos, stable_counts, x_dense, 'pchip'); % 样条插值
+
+% 绘制平滑曲线（红色实线）并在原始数据点添加圆圈标记
+plot(x_dense, y_dense, 'r:', 'LineWidth', 2);       % 平滑曲线
+plot(x_pos, stable_counts, 'ro', 'MarkerFaceColor', 'none', 'MarkerSize', 3); % 数据点标记
+xticks(x_pos);% 强制等距刻度
+xtick_labels = arrayfun(@(x) num2str(x), lambda_display_values, 'UniformOutput', false);
+xticklabels(xtick_labels); % 显示为原始λ值（×1e-6）
+xlim([0.5, num_lambdas+0.5]);
+
+%设置纵坐标
+yticks(0:10:times);
+ylim([0 times]);
+
+% 坐标轴样式
+ax = gca;
+ax.Box = 'off';                     % 关闭默认框
+plot([0.5, 0.5], [0, times], 'k-', 'LineWidth', 1);    % 左框
+plot([0.5, num_lambdas+0.5], [times, times], 'k-', 'LineWidth', 1); % 上框
+plot([num_lambdas+0.5, num_lambdas+0.5], [times, 0], 'k-', 'LineWidth', 1); % 右框
+plot([num_lambdas+0.5, 0.5], [0, 0], 'k-', 'LineWidth', 1); % 下框
+
+ax.Layer = 'top'; % 确保边框在图层最上方
+
+ax.XAxisLocation = 'origin';
+ax.YAxisLocation = 'origin';
+xlabel('\gamma (×10^{-7})');
+ylabel('The Percentage Stable Controller(%)');
+title('The Impact of γ on Stable Controller Percentage '); 
+% h= title('The impact of γ on Stable Controller Success Times ');
+% % 获取当前title的位置
+% pos = get(h, 'Position');
+% % 调整垂直位置，这里将垂直位置增加 0.1，可根据需要修改
+% pos(2) = pos(2) + 0.1; 
+% % set(h, 'Position', pos);
+%% 判断原系统是否稳定
+% % 系统参数设置
+%    n = 3;                         % 状态维度
+%    m = 3;                         % 输入维度（B = I）
+%    T = 20;                        % 数据长度
+%    Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+%    R = (1e-3)* eye(m);            % 输入权重矩阵
+% 
+% A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+% B = eye(3);                       %单位矩阵
+% K=dlqr(A,B,Q,R);
+% disp(K)
+% KShur=A+B* K;
+% % 计算 KShur 的特征值
+% eigenvalues = eig(KShur);
+% 
+% % 检查所有特征值的模是否都小于 1
+% is_stable = all(abs(eigenvalues) < 1);
+% 
+% if is_stable
+%     disp('矩阵 A + B * K 是舒尔稳定的。');
+% else
+%     disp('矩阵 A + B * K 不是舒尔稳定的。');
+% end
+
+
+%% 公式17加lambda——攻击系统 固定 lambda 值 , alpha取不同值
+% 目前得出结论：alpha值不影响稳定率
+
+
+% % 系统参数设置
+% n = 3;                         % 状态维度
+% m = 3;                         % 输入维度（B = I）
+% T = 20;                        % 数据长度
+% Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+% R = (1e-3)* eye(m);            % 输入权重矩阵
+% 
+% A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+% B = eye(3);                       %单位矩阵
+% K=dlqr(A,B,Q,R);
+% disp(K)
+% lambda = 0.01*1e-7; % 固定 lambda 值
+% alpha_values = [0.1:0.1:1, 2:1:10]; % alpha 取值范围
+% num_alphas = length(alpha_values);
+% 
+% stable_percentages = zeros(num_alphas, 1);
+% times = 10;
+% for alpha_index = 1:num_alphas
+%     alpha = alpha_values(alpha_index);
+%     stable_count = 0;
+%     for experiment = 1:times
+%         U0 = randn(m, T);
+%         D0 = 0.1*randn(n,T); 
+%         % disp('U0=');
+%         % disp(U0)
+%         x = zeros(n, T+1);            % 初始状态
+%         for k = 1:T                   % 按照状态转移方程更新状态
+%             Uk = U0(:, k);
+%             Dk = D0(:, k);
+%             x(:, k + 1) = A * x(:, k) + B * Uk + Dk;
+%         end
+%         X0 = x(:, 2:end); 
+%         X1 = A * X0 + B * U0;        % 下一时刻状态 (无噪声情况下)
+%         X1 = X1 + D0;                % 添加噪声后的下一时刻状态                          
+%         W0 = [U0; X0];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+%         R1 = rank(W0);
+%         [m_rows, n_cols] = size(W0);   % 正确获取行数和列数（避免使用内置函数名）
+%         min_dim = min(m_rows, n_cols); % 计算行数和列数的较小值
+%         % if R1 == min_dim
+%         %     disp('矩阵W0是满秩的');
+%         % else
+%         %     disp('矩阵W0不是满秩的');
+%         % end
+%         all_combinations = {};           % 生成所有非空攻击组合（按通道数量及索引排序）
+%         for k = 1:m
+%             combs = nchoosek(1:m, k);    % 选择k个通道的组合
+%             for i = 1:size(combs, 1)
+%                 all_combinations{end+1} = combs(i, :);
+%             end
+%         end
+%         M = length(all_combinations) + 1;% j=1对应无攻击
+%         j = randi([1, M],1);
+%         D_a = cell(M, 1);
+%         K_a = cell(M, 1);
+%         if j == 1   
+%             D_a{j} = zeros(m,m);                    % 无攻击时D_a,K_a为零矩阵
+%             K_a{j} = zeros(m,n); 
+%         else
+%             selected_channels = all_combinations{j-1};   % 获取选中的通道索引
+%             diag_elements = zeros(1, m);
+%             diag_elements(selected_channels) = 1;        % 选中的通道置1
+%             D_a{j} = diag(diag_elements);    
+%             K_a{j} = randn(m, n);  
+%         end
+%         product = D_a{j} * K_a{j};
+%         % 修正变量名，原代码 U_{k} 不符合 MATLAB 变量命名规则
+%         U_k = product*X0;
+% 
+%         current_norm = norm(product, 'fro');             % 计算范数
+%         if current_norm > (alpha)
+%             scaling_factor = (alpha)* current_norm;
+%             K_a{j} = K_a{j} * scaling_factor;            % 缩放矩阵
+%         end
+% 
+%         productssuofang = D_a{j} * K_a{j};
+%         % 修正变量名，原代码 Ua{k} 不符合 MATLAB 变量命名规则
+%         Ua_k = productssuofang*X0;
+%         % 重新设计攻击系统
+%         U0a=U0+Ua_k;
+%         xa = zeros(n, T+1);            % 初始状态
+%         for k = 1:T                   % 按照状态转移方程更新状态
+%             Uk = U0a(:, k);
+%             Dk = D0(:, k);
+%             xa(:, k + 1) = A * xa(:, k) + B * Uk + Dk;
+%         end
+%         X0a = xa(:, 2:end); 
+%         X1a = A * X0a + B * U0a;        % 下一时刻状态 (无噪声情况下)
+%         X1 = X1a + D0;                % 添加噪声后的下一时刻状态                          
+%         W0a = [U0a; X0a];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+%         R2 = rank(W0a);
+%         [m_rows, n_cols] = size(W0a);   % 正确获取行数和列数（避免使用内置函数名）
+%         min_dima = min(m_rows, n_cols); % 计算行数和列数的较小值
+%         % if R2 == min_dima
+%         %     disp('矩阵W0a是满秩的');
+%         % else
+%         %     disp('矩阵W0a不是满秩的');
+%         % end
+% 
+%         cvx_clear;
+%         Pi = eye(size(W0a,2)) - pinv(W0a)*W0a;
+%         cvx_begin sdp quiet
+%             variable X(n,n)
+%             variable V(size(W0a,2), n)    % 辅助变量Y=GP
+%             variable G(size(W0a,2), n)
+%             minimize trace(Q*X0a*V) + trace(X)+lambda * norm(Pi*V, 'fro');
+%             subject to
+%                [X0a*V - eye(n), X1a * V;
+%                  V' * X1a',     X0a*V] >= 0;
+%                 [X,           sqrtm(R)*U0a * V;
+%                  V' * U0a' * sqrtm(R), X0a*V] >= 0;
+%                 Pi * V == 0;
+%         cvx_end
+%         if strcmp(cvx_status, 'Solved')
+%             Ke = U0a*V*pinv(X0a*V);
+%             K=U0a*V*pinv(X0a*V)-productssuofang;
+%             A_shurer = A + B * Ke;
+%             if all(abs(eig(A_shurer)) < 1)
+%                 stable_count = stable_count + 1; 
+%             end
+%         end
+%     end
+%     stable_percentages(alpha_index) = (stable_count / times)*100;
+%     fprintf('当 alpha = %.3f 时',alpha);
+%     disp(['稳定百分比：', num2str(stable_percentages(alpha_index)), '%']); 
+%     stable_counts(alpha_index) = stable_count;
+% end
+% 
+% figure;
+% hold on;
+% % 定义等距横坐标位置
+% alpha_display_values = alpha_values;
+% x_pos = 1:num_alphas; % 等距索引 [1,2,...,num_alphas]
+% % 生成密集插值点（使曲线平滑）
+% x_dense = linspace(1, num_alphas, 1000); % 1000个插值点
+% y_dense = interp1(x_pos, stable_counts, x_dense, 'pchip'); % 样条插值
+% 
+% % 绘制平滑曲线（蓝色实线）并在原始数据点添加圆圈标记
+% plot(x_dense, y_dense, 'r-', 'LineWidth', 1);       % 平滑曲线
+% plot(x_pos, stable_counts, 'ro', 'MarkerFaceColor', 'r', 'MarkerSize', 5); % 数据点标记
+% xticks(x_pos);% 强制等距刻度
+% xtick_labels = arrayfun(@(x) num2str(x), alpha_display_values, 'UniformOutput', false);
+% xticklabels(xtick_labels); % 显示为原始 alpha 值
+% xlim([0.5, num_alphas+0.5]);
+% 
+% %设置纵坐标
+% yticks(0:1:times);
+% ylim([0 times]);
+% 
+% % 坐标轴样式
+% ax = gca;
+% ax.Box = 'off';                     % 关闭默认框
+% plot([0.5, 0.5], [0, times], 'k-', 'LineWidth', 1);    % 左框
+% plot([0.5, num_alphas+0.5], [times, times], 'k-', 'LineWidth', 1); % 上框
+% plot([num_alphas+0.5, num_alphas+0.5], [times, 0], 'k-', 'LineWidth', 1); % 右框
+% plot([num_alphas+0.5, 0.5], [0, 0], 'k-', 'LineWidth', 1); % 下框
+% 
+% ax.Layer = 'top'; % 确保边框在图层最上方
+% 
+% ax.XAxisLocation = 'origin';
+% ax.YAxisLocation = 'origin';
+% xlabel('alpha');
+% ylabel('Successful Trials Times');
+%% 控制器误差，中位数求解 问题：误差太大
+% % 当 lambda = 0.000001 时稳定百分比：90%，其余百分百稳定
+% % lambda_values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50] * 1e-6;
+% 
+% % 系统参数设置
+%    n = 3;                         % 状态维度
+%    m = 3;                         % 输入维度（B = I）
+%    T = 20;                        % 数据长度
+%    Q = eye(n);                    % 状态权重矩阵 n维单位矩阵
+%    R = (1e-3)* eye(m);            % 输入权重矩阵
+% 
+% A = [1.01 0.01 0; 0.01 1.01 0.01; 0 0.01 1.01];
+% B = eye(3);                       %单位矩阵
+% K=dlqr(A,B,Q,R);
+% Knorm2=norm(K,2);
+% disp('Knorm2=')
+% disp(Knorm2)
+% Knorm2pf=Knorm2^2;
+% disp('Knorm2pf=')
+% disp(Knorm2pf)
+% disp('K=')
+% disp(K)
+% cimi=1e-7;
+% lambda_values = [8:1:10, 20:10:130] * cimi; 
+% num_lambdas = length(lambda_values);
+% % disp(num_lambdas)
+% 
+% stable_percentages = zeros(num_lambdas, 1);
+% times=10;
+% for lambda_index = 1:num_lambdas
+%     lambda = lambda_values(lambda_index);
+%     stable_count = 0;
+%     for experiment = 1:times
+% U0 = randn(m, T);
+% D0 = 0.1*randn(n,T); 
+% % disp('U0=');
+% % disp(U0)
+% x = zeros(n, T+1);            % 初始状态
+% for k = 1:T                   % 按照状态转移方程更新状态
+%     Uk = U0(:, k);
+%     Dk = D0(:, k);
+%     x(:, k + 1) = A * x(:, k) + B * Uk + Dk;
+% end
+% X0 = x(:, 2:end); 
+% X1 = A * X0 + B * U0;        % 下一时刻状态 (无噪声情况下)
+% X1 = X1 + D0;                % 添加噪声后的下一时刻状态                          
+% W0 = [U0; X0];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+% R1 = rank(W0);
+% [m_rows, n_cols] = size(W0);   % 正确获取行数和列数（避免使用内置函数名）
+% min_dim = min(m_rows, n_cols); % 计算行数和列数的较小值
+% % if R1 == min_dim
+% %     disp('矩阵W0是满秩的');
+% % else
+% %     disp('矩阵W0不是满秩的');
+% % end
+% all_combinations = {};           % 生成所有非空攻击组合（按通道数量及索引排序）
+% for k = 1:m
+%     combs = nchoosek(1:m, k);    % 选择k个通道的组合
+%     for i = 1:size(combs, 1)
+%         all_combinations{end+1} = combs(i, :);
+%     end
+% end
+% M = length(all_combinations) + 1;% j=1对应无攻击
+% j = randi([1, M],1);
+% D_a = cell(M, 1);
+% K_a = cell(M, 1);
+% if j == 1   
+%         D_a{j} = zeros(m,m);     % 无攻击时D_a,K_a为零矩阵
+%         K_a{j} = zeros(m,n); 
+% else
+%     selected_channels = all_combinations{j-1};   % 获取选中的通道索引
+%     diag_elements = zeros(1, m);
+%     diag_elements(selected_channels) = 1;        % 选中的通道置1
+%     D_a{j} = diag(diag_elements);    
+%     K_a{j} = randn(m, n);  
+% end
+% product = D_a{j} * K_a{j};
+% U_{k}=product*X0;
+% 
+% alpha = 0.8;                                     % 攻击能量上限
+% current_norm = norm(product, 'fro');             % 计算范数
+% if current_norm > (alpha)
+%     scaling_factor = (alpha)* current_norm;
+%     K_a{j} = K_a{j} * scaling_factor;            % 缩放矩阵
+% end
+% 
+% productssuofang = D_a{j} * K_a{j};
+% % Ua{k}=productssuofang*X0;
+% % 重新设计攻击系统
+% U0a=U0+productssuofang*X0;
+% xa = zeros(n, T+1);            % 初始状态
+% for k = 1:T                   % 按照状态转移方程更新状态
+%     Uk = U0a(:, k);
+%     Dk = D0(:, k);
+%     xa(:, k + 1) = A * xa(:, k) + B * Uk + Dk;
+% end
+% X0a = xa(:, 2:end); 
+% X1a = A * X0a + B * U0a;        % 下一时刻状态 (无噪声情况下)
+% X1 = X1a + D0;                % 添加噪声后的下一时刻状态                          
+% W0a = [U0a; X0a];               % 构建数据矩阵 W0 = [U0; X0](m+n) × T 
+% R2 = rank(W0a);
+% [m_rows, n_cols] = size(W0a);   % 正确获取行数和列数（避免使用内置函数名）
+% min_dima = min(m_rows, n_cols); % 计算行数和列数的较小值
+% % if R2 == min_dima
+% %     disp('矩阵W0a是满秩的');
+% % else
+% %     disp('矩阵W0a不是满秩的');
+% % end
+% 
+%         cvx_clear;
+%         Pi = eye(size(W0a,2)) - pinv(W0a)*W0a;
+%         cvx_begin sdp quiet
+%             variable X(n,n)
+%             variable V(size(W0a,2), n)    % 辅助变量Y=GP
+%             variable G(size(W0a,2), n)
+%             minimize trace(Q*X0a*V) + trace(X)+lambda * norm(Pi*V, 'fro');
+%             subject to
+%                [X0a*V - eye(n), X1a * V;
+%                  V' * X1a',     X0a*V] >= 0;
+%                 [X,           sqrtm(R)*U0a * V;
+%                  V' * U0a' * sqrtm(R), X0a*V] >= 0;
+%                 Pi * V == 0;
+%         cvx_end
+%         if strcmp(cvx_status, 'Solved')
+%             Ke = U0a*V*pinv(X0a*V);
+%             Kn=Ke -productssuofang;
+%             A_shurer = A + B * Ke;
+%             if all(abs(eig(A_shurer)) < 1)
+%                 stable_count = stable_count + 1;              
+%                 disp('Kn=')
+%                 disp(Kn)
+%                 Knnorm2=norm(Kn,2);
+%                 disp('Knnorm2=')
+%                 disp(Knnorm2)
+%                 Knnorm2pf=Knnorm2^2;
+%                 error=Knnorm2pf - Knorm2pf; %/ norm(k, 2)^2
+%                 disp('error=')
+%                 disp(error)
+% 
+%             end
+%         end
+%     end
+%     stable_percentages(lambda_index) = (stable_count / times)*10;
+%     fprintf('当 lambda = %.7f 时',lambda);
+%     disp(['稳定百分比：', num2str(stable_percentages(lambda_index)), '%']); 
+% end
